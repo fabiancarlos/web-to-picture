@@ -6,16 +6,50 @@
 
   let pipWindow = null;
   let isActive = false;
+  let isPageUnloading = false;
+  let manualCloseRequested = false;
+  let reopenGestureArmed = false;
+  let tabId = null;
+
+  const DEFAULT_WIDTH = 390;
+  const DEFAULT_HEIGHT = 844;
+  const AUTO_REOPEN_DELAY_MS = 600;
+  const AUTO_REOPEN_MAX_ATTEMPTS = 6;
+
+  window.addEventListener('beforeunload', () => {
+    isPageUnloading = true;
+  });
+
+  initPersistence();
 
   // Expõe a função de toggle para o popup.js via executeScript
   window.__webToPicture_toggle = async function (width, height, shouldClose) {
+    const normalizedWidth = width || DEFAULT_WIDTH;
+    const normalizedHeight = height || DEFAULT_HEIGHT;
+
     if (shouldClose || (isActive && pipWindow && !pipWindow.closed)) {
+      manualCloseRequested = true;
+      await disablePersistentSession();
       closePip();
       return { closed: true };
     }
 
     try {
-      await openPip(width, height);
+      await saveSession({
+        enabled: true,
+        width: normalizedWidth,
+        height: normalizedHeight,
+        url: window.location.href,
+        reopenStatus: {
+          state: 'idle',
+          attempt: 0,
+          maxAttempts: AUTO_REOPEN_MAX_ATTEMPTS,
+          message: '',
+          updatedAt: Date.now(),
+        },
+      });
+
+      await openPip(normalizedWidth, normalizedHeight);
       return { opened: true };
     } catch (err) {
       return { error: err.message };
@@ -28,7 +62,7 @@
       sendResponse({ active: isActive && !!pipWindow && !pipWindow.closed });
     }
     if (msg.action === 'activate') {
-      openPip(msg.width || 390, msg.height || 844)
+      openPip(msg.width || DEFAULT_WIDTH, msg.height || DEFAULT_HEIGHT)
         .then(() => sendResponse({ ok: true }))
         .catch((e) => sendResponse({ error: e.message }));
       return true; // async response
@@ -66,6 +100,12 @@
     pipWindow.addEventListener('pagehide', () => {
       isActive = false;
       pipWindow = null;
+
+      if (manualCloseRequested) {
+        disablePersistentSession();
+      }
+
+      manualCloseRequested = false;
     });
   }
 
@@ -250,7 +290,11 @@
       frame.src = url;
     });
 
-    btnClose.addEventListener('click', () => win.close());
+    btnClose.addEventListener('click', async () => {
+      manualCloseRequested = true;
+      await disablePersistentSession();
+      closePip();
+    });
 
     const openInChrome = () => win.open(url, '_blank');
     btnExternal.addEventListener('click', openInChrome);
@@ -261,8 +305,227 @@
     if (pipWindow && !pipWindow.closed) {
       pipWindow.close();
     }
+
+    if (isPageUnloading) {
+      return;
+    }
+
     isActive = false;
     pipWindow = null;
+  }
+
+  async function initPersistence() {
+    tabId = await getCurrentTabId();
+    if (!tabId) {
+      return;
+    }
+
+    const state = await getSession();
+    if (!state?.enabled) {
+      return;
+    }
+
+    if (!isSamePageForPersistence(window.location.href, state.url)) {
+      return;
+    }
+
+    attemptAutoReopen(state, 1);
+  }
+
+  function attemptAutoReopen(state, attempt) {
+    setTimeout(async () => {
+      if (isActive) {
+        return;
+      }
+
+      const latestState = await getSession();
+      if (!latestState?.enabled) {
+        return;
+      }
+
+      if (!isSamePageForPersistence(window.location.href, latestState.url || state.url)) {
+        return;
+      }
+
+      await updateReopenStatus(
+        'retrying',
+        attempt,
+        AUTO_REOPEN_MAX_ATTEMPTS,
+        `Reabrindo... tentativa ${attempt}/${AUTO_REOPEN_MAX_ATTEMPTS}`
+      );
+
+      try {
+        await openPip(
+          latestState.width || state.width || DEFAULT_WIDTH,
+          latestState.height || state.height || DEFAULT_HEIGHT
+        );
+
+        await updateReopenStatus(
+          'success',
+          attempt,
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          'Reaberto com sucesso.'
+        );
+      } catch (_error) {
+        if (attempt < AUTO_REOPEN_MAX_ATTEMPTS) {
+          attemptAutoReopen(state, attempt + 1);
+          return;
+        }
+
+        updateReopenStatus(
+          'failed',
+          attempt,
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          `Falha ao reabrir automaticamente após ${AUTO_REOPEN_MAX_ATTEMPTS} tentativas.`
+        );
+        armGestureReopen(state);
+      }
+    }, AUTO_REOPEN_DELAY_MS * attempt);
+  }
+
+  function armGestureReopen(state) {
+    if (reopenGestureArmed) {
+      return;
+    }
+
+    reopenGestureArmed = true;
+
+    const tryReopenFromGesture = async () => {
+      window.removeEventListener('pointerdown', tryReopenFromGesture, true);
+      window.removeEventListener('keydown', tryReopenFromGesture, true);
+      reopenGestureArmed = false;
+
+      const latestState = await getSession();
+      if (!latestState?.enabled || isActive) {
+        return;
+      }
+
+      try {
+        await updateReopenStatus(
+          'retrying',
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          'Reabrindo após interação do usuário...'
+        );
+
+        await openPip(
+          latestState.width || state.width || DEFAULT_WIDTH,
+          latestState.height || state.height || DEFAULT_HEIGHT
+        );
+
+        await updateReopenStatus(
+          'success',
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          'Reaberto após interação do usuário.'
+        );
+      } catch (_error) {
+        await updateReopenStatus(
+          'failed',
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          AUTO_REOPEN_MAX_ATTEMPTS,
+          'Não foi possível reabrir após interação.'
+        );
+      }
+    };
+
+    window.addEventListener('pointerdown', tryReopenFromGesture, true);
+    window.addEventListener('keydown', tryReopenFromGesture, true);
+  }
+
+  async function updateReopenStatus(state, attempt, maxAttempts, message) {
+    const existing = await getSession();
+    if (!existing) {
+      return;
+    }
+
+    await saveSession({
+      ...existing,
+      reopenStatus: {
+        state,
+        attempt,
+        maxAttempts,
+        message,
+        updatedAt: Date.now(),
+      },
+    });
+  }
+
+  function isSamePageForPersistence(currentUrl, storedUrl) {
+    try {
+      const current = new URL(currentUrl);
+      const stored = new URL(storedUrl);
+      return current.origin === stored.origin && current.pathname === stored.pathname;
+    } catch (_error) {
+      return currentUrl === storedUrl;
+    }
+  }
+
+  function getCurrentTabId() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'getTabId' }, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+          return;
+        }
+
+        resolve(response?.tabId ?? null);
+      });
+    });
+  }
+
+  function getSessionKey() {
+    if (!tabId) {
+      return null;
+    }
+
+    return `webToPicture:tab:${tabId}`;
+  }
+
+  async function getSession() {
+    if (!tabId) {
+      tabId = await getCurrentTabId();
+    }
+
+    const key = getSessionKey();
+    if (!key) {
+      return null;
+    }
+
+    const data = await chrome.storage.session.get(key);
+    return data[key] || null;
+  }
+
+  async function saveSession(state) {
+    if (!tabId) {
+      tabId = await getCurrentTabId();
+    }
+
+    const key = getSessionKey();
+    if (!key) {
+      return;
+    }
+
+    await chrome.storage.session.set({ [key]: state });
+  }
+
+  async function disablePersistentSession() {
+    const existing = await getSession();
+    if (!existing) {
+      return;
+    }
+
+    await saveSession({
+      ...existing,
+      enabled: false,
+      reopenStatus: {
+        state: 'idle',
+        attempt: 0,
+        maxAttempts: AUTO_REOPEN_MAX_ATTEMPTS,
+        message: '',
+        updatedAt: Date.now(),
+      },
+    });
   }
 
 })();

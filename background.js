@@ -1,5 +1,21 @@
 // background.js - Service Worker da extensão
 
+async function enableSessionStorageForContentScripts() {
+  if (!chrome.storage?.session?.setAccessLevel) {
+    return;
+  }
+
+  try {
+    await chrome.storage.session.setAccessLevel({
+      accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
+    });
+  } catch (error) {
+    console.warn('Não foi possível habilitar storage.session para content scripts:', error);
+  }
+}
+
+enableSessionStorageForContentScripts();
+
 // Lida com o atalho de teclado para ativar/desativar Web to Picture
 chrome.commands.onCommand.addListener(async (command) => {
   if (command === 'activate-web-to-picture') {
@@ -20,8 +36,16 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.action === 'getTabId') {
+    sendResponse({ tabId: sender.tab?.id ?? null });
+  }
+});
+
 // Ao instalar a extensão, exibe uma notificação de boas-vindas
 chrome.runtime.onInstalled.addListener((details) => {
+  enableSessionStorageForContentScripts();
+
   if (details.reason === 'install') {
     console.log('Web to Picture instalado com sucesso!');
   }

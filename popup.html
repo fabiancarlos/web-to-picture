@@ -215,6 +215,22 @@
       text-align: center;
       min-height: 16px;
     }
+
+    .reopen-debug {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #60a5fa;
+      text-align: center;
+      min-height: 16px;
+    }
+
+    .reopen-debug.failed {
+      color: #f87171;
+    }
+
+    .reopen-debug.success {
+      color: #34d399;
+    }
   </style>
 </head>
 <body>
@@ -261,6 +277,7 @@
     </button>
 
     <div class="status-msg" id="statusMsg"></div>
+    <div class="reopen-debug" id="reopenDebug"></div>
 
     <div class="shortcut-hint">
       Atalho: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>

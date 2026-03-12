@@ -3,7 +3,7 @@
   "name": "Web to Picture",
   "version": "1.0.0",
   "description": "Abre a página atual em uma janela flutuante Picture-in-Picture no formato mobile.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Web to Picture",

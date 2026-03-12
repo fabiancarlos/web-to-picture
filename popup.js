@@ -2,9 +2,11 @@
 
 let currentTab = null;
 let isActive = false;
+let reopenDebugInterval = null;
 
 const btnActivate = document.getElementById('btnActivate');
 const statusMsg = document.getElementById('statusMsg');
+const reopenDebug = document.getElementById('reopenDebug');
 const currentUrlEl = document.getElementById('currentUrl');
 const pipWidthInput = document.getElementById('pipWidth');
 const pipHeightInput = document.getElementById('pipHeight');
@@ -24,6 +26,8 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         setActiveState(true);
       }
     });
+
+    startReopenDebugPolling();
 
     // Desabilita para páginas especiais do Chrome
     if (tabs[0].url.startsWith('chrome://') || tabs[0].url.startsWith('chrome-extension://')) {
@@ -84,6 +88,13 @@ btnActivate.addEventListener('click', async () => {
   setTimeout(() => window.close(), 300);
 });
 
+window.addEventListener('beforeunload', () => {
+  if (reopenDebugInterval) {
+    clearInterval(reopenDebugInterval);
+    reopenDebugInterval = null;
+  }
+});
+
 function setActiveState(active) {
   isActive = active;
   if (active) {
@@ -104,6 +115,58 @@ function setActiveState(active) {
       </svg>
       Abrir Web to Picture
     `;
+  }
+}
+
+function startReopenDebugPolling() {
+  if (!currentTab?.id) {
+    return;
+  }
+
+  refreshReopenDebug();
+
+  if (reopenDebugInterval) {
+    clearInterval(reopenDebugInterval);
+  }
+
+  reopenDebugInterval = setInterval(refreshReopenDebug, 500);
+}
+
+async function refreshReopenDebug() {
+  if (!currentTab?.id) {
+    return;
+  }
+
+  const key = `webToPicture:tab:${currentTab.id}`;
+  const result = await chrome.storage.session.get(key);
+  const state = result[key];
+  const debug = state?.reopenStatus;
+
+  if (!debug || debug.state === 'idle') {
+    reopenDebug.textContent = '';
+    reopenDebug.classList.remove('failed', 'success');
+    return;
+  }
+
+  if (debug.state === 'retrying') {
+    const attempt = debug.attempt || 0;
+    const maxAttempts = debug.maxAttempts || 6;
+    reopenDebug.textContent = `Reabrindo... tentativa ${attempt}/${maxAttempts}`;
+    reopenDebug.classList.remove('failed', 'success');
+    return;
+  }
+
+  if (debug.state === 'failed') {
+    reopenDebug.textContent = debug.message || 'Falha ao reabrir automaticamente.';
+    reopenDebug.classList.add('failed');
+    reopenDebug.classList.remove('success');
+    return;
+  }
+
+  if (debug.state === 'success') {
+    reopenDebug.textContent = debug.message || 'Reaberto com sucesso.';
+    reopenDebug.classList.add('success');
+    reopenDebug.classList.remove('failed');
   }
 }
 
