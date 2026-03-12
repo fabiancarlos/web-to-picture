@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web to Picture</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 280px;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .header-icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    .header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: #ffffff;
+    }
+
+    .header .badge {
+      margin-left: auto;
+      font-size: 10px;
+      color: #888;
+      background: #1e1e1e;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .content {
+      padding: 12px 16px;
+    }
+
+    .url-preview {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+    }
+
+    .url-preview .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3d8b3d;
+      flex-shrink: 0;
+    }
+
+    .url-preview span {
+      font-size: 11px;
+      color: #aaa;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .size-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .size-row label {
+      font-size: 11px;
+      color: #888;
+      flex-shrink: 0;
+    }
+
+    .size-presets {
+      display: flex;
+      gap: 4px;
+    }
+
+    .size-btn {
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      border-radius: 5px;
+      color: #ccc;
+      font-size: 10px;
+      padding: 3px 7px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .size-btn:hover,
+    .size-btn.active {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+    }
+
+    .custom-size {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .custom-size label {
+      font-size: 11px;
+      color: #888;
+      flex-shrink: 0;
+    }
+
+    .custom-size .inputs {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .custom-size input {
+      width: 54px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 5px;
+      color: #f0f0f0;
+      font-size: 11px;
+      padding: 4px 6px;
+      text-align: center;
+      outline: none;
+    }
+
+    .custom-size input:focus {
+      border-color: #2563eb;
+    }
+
+    .custom-size .sep {
+      color: #555;
+      font-size: 12px;
+    }
+
+    .btn-activate {
+      width: 100%;
+      padding: 10px;
+      background: #2563eb;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-activate:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-activate:disabled {
+      background: #333;
+      color: #666;
+      cursor: not-allowed;
+    }
+
+    .btn-activate.active {
+      background: #dc2626;
+    }
+
+    .btn-activate.active:hover {
+      background: #b91c1c;
+    }
+
+    .shortcut-hint {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 10px;
+      color: #555;
+    }
+
+    .shortcut-hint kbd {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-family: inherit;
+      font-size: 10px;
+      color: #888;
+    }
+
+    .status-msg {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #f87171;
+      text-align: center;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg class="header-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="3" width="20" height="14" rx="2" stroke="#2563eb" stroke-width="2"/>
+      <rect x="12" y="10" width="9" height="6" rx="1" fill="#2563eb"/>
+      <path d="M7 21H17" stroke="#444" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <h1>Web to Picture</h1>
+    <span class="badge">v1.0</span>
+  </div>
+
+  <div class="content">
+    <div class="url-preview">
+      <span class="dot"></span>
+      <span id="currentUrl">Carregando...</span>
+    </div>
+
+    <div class="size-row">
+      <label>Preset:</label>
+      <div class="size-presets">
+        <button class="size-btn active" data-w="390" data-h="844">iPhone</button>
+        <button class="size-btn" data-w="412" data-h="915">Android</button>
+        <button class="size-btn" data-w="768" data-h="1024">Tablet</button>
+      </div>
+    </div>
+
+    <div class="custom-size">
+      <label>Tamanho:</label>
+      <div class="inputs">
+        <input type="number" id="pipWidth" value="390" min="200" max="1200" placeholder="W" />
+        <span class="sep">×</span>
+        <input type="number" id="pipHeight" value="844" min="300" max="1600" placeholder="H" />
+      </div>
+    </div>
+
+    <button class="btn-activate" id="btnActivate">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="3" width="20" height="14" rx="2" stroke="white" stroke-width="2"/>
+        <rect x="12" y="10" width="9" height="6" rx="1" fill="white"/>
+      </svg>
+      Abrir Web to Picture
+    </button>
+
+    <div class="status-msg" id="statusMsg"></div>
+
+    <div class="shortcut-hint">
+      Atalho: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
